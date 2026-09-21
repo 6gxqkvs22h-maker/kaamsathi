@@ -49,8 +49,6 @@ function pinIcon(
   priceLabel?: string,
 ) {
   const t = tradeByKey(trade);
-  // teardrop pin + price pill so customers can compare workers right on the map.
-  // can compare workers right on the map.
   const pill = priceLabel
     ? `<div style="
         margin-top:2px;
@@ -140,8 +138,8 @@ export default function MapView({
       style={{ height, width: "100%", background: "#0f172a" }}
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_3rw9_1_8bab93b88ca1f98cc7de76f8"
       />
       <Recenter lat={center.lat} lng={center.lng} />
       <ClickHandler onPick={onPick} />
