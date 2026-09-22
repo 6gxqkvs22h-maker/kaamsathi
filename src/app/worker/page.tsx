@@ -6,7 +6,6 @@ import Stars from "@/components/Stars";
 import { KTM_AREAS, TRADES, tradeByKey } from "@/lib/trades";
 import { useSettings } from "@/lib/useSettings";
 import {
-  clearWorkerToken,
   setWorkerToken,
   workerHeaders,
 } from "@/lib/clientAuth";
@@ -110,7 +109,6 @@ export default function WorkerPage() {
     bio: "",
     avatar: "👨‍🔧",
   });
-  const [loginPhone, setLoginPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -235,25 +233,6 @@ export default function WorkerPage() {
     await loadMe();
   };
 
-  const login = async () => {
-    setBusy(true);
-    setError("");
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier: loginPhone }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "Login failed");
-      return;
-    }
-    if (data.token) setWorkerToken(data.token);
-    setLoginPhone("");
-    await loadMe();
-  };
-
   const saveProfile = async () => {
     setBusy(true);
     await fetch("/api/worker/me", {
@@ -269,19 +248,6 @@ export default function WorkerPage() {
   const toggleOnline = async () => {
     await fetch("/api/worker/me", { method: "POST", headers: workerHeaders() });
     await loadMe();
-  };
-
-  const logout = async () => {
-    clearWorkerToken();
-    try {
-      await fetch("/api/worker/session", { method: "DELETE" });
-    } catch {
-      // ignore
-    }
-    setProfile(null);
-    setJobs([]);
-    setBids([]);
-    setWallet(null);
   };
 
   const [bidDraft, setBidDraft] = useState<
@@ -619,24 +585,18 @@ export default function WorkerPage() {
           </div>
 
           <div className="space-y-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-2xl border border-lime-400/40 bg-lime-400/5 p-4">
               <h2 className="text-sm font-bold">Already registered?</h2>
-              <p className="mb-2 text-xs text-slate-400">
-                Log in with the mobile number you used.
+              <p className="mb-3 text-xs text-slate-400">
+                Everyone signs in on one page — use the mobile number you
+                registered with.
               </p>
-              <input
-                value={loginPhone}
-                onChange={(e) => setLoginPhone(e.target.value)}
-                placeholder="98xxxxxxxx"
-                className="mb-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-              />
-              <button
-                onClick={login}
-                disabled={busy}
-                className="w-full rounded-xl bg-slate-800 py-2 text-sm font-bold text-lime-300 disabled:opacity-50"
+              <Link
+                href="/login"
+                className="block w-full rounded-xl bg-lime-400 py-2.5 text-center text-sm font-black text-slate-950 transition hover:bg-lime-300"
               >
-                Log in to worker mode
-              </button>
+                Go to login
+              </Link>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-xs text-slate-400">
               <div className="mb-1 font-bold text-slate-200">How it works</div>
@@ -704,12 +664,6 @@ export default function WorkerPage() {
             }`}
           >
             {profile.online ? "🟢 Online — accepting jobs" : "⚪ Offline"}
-          </button>
-          <button
-            onClick={logout}
-            className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300"
-          >
-            Log out
           </button>
         </div>
       </div>

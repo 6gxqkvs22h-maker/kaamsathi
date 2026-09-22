@@ -46,6 +46,8 @@ export async function PATCH(req: NextRequest) {
 
   const patch: Partial<typeof providers.$inferInsert> = {};
   if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim().slice(0, 60);
+  if (typeof body.avatar === "string" && body.avatar.trim())
+    patch.avatar = body.avatar.slice(0, 8);
   if (typeof body.bio === "string") patch.bio = body.bio.slice(0, 600);
   if (typeof body.whatsapp === "string") patch.whatsapp = body.whatsapp.slice(0, 25);
   if (typeof body.languages === "string") patch.languages = body.languages.slice(0, 80);

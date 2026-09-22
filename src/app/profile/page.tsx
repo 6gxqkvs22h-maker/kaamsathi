@@ -1,305 +1,303 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import BottomNav from "@/components/BottomNav";
+import Stars from "@/components/Stars";
+import { useSession } from "@/lib/useSession";
 import {
-  adminHeaders,
   clearAdminToken,
   clearCustomerToken,
   clearWorkerToken,
   customerHeaders,
-  getCustomerToken,
-  getWorkerToken,
-  workerHeaders,
 } from "@/lib/clientAuth";
-
-type Role = "worker" | "customer" | "admin" | null;
-
-type WorkerProfile = {
-  id: number;
-  name: string;
-  trade: string;
-  avatar: string;
-  phone: string;
-  whatsapp: string;
-  area: string;
-  online: boolean;
-  rating: number;
-  jobsDone: number;
-};
-
-type CustomerProfile = {
-  id: number;
-  name: string;
-  username: string;
-  phone: string;
-  area: string;
-  avatar: string;
-};
+import { categoryByKey, splitList } from "@/lib/marketplace";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [role, setRole] = useState<Role>(null);
-  const [loading, setLoading] = useState(true);
-  const [worker, setWorker] = useState<WorkerProfile | null>(null);
-  const [customer, setCustomer] = useState<CustomerProfile | null>(null);
-
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const load = async () => {
-      // Check admin first
-      try {
-        const r = await fetch("/api/admin/session", { headers: adminHeaders() });
-        const d = await r.json();
-        if (d?.admin) {
-          setRole("admin");
-          setLoading(false);
-          return;
-        }
-      } catch {
-        // ignore
-      }
-
-      // Check worker
-      const wToken = getWorkerToken();
-      if (wToken) {
-        try {
-          const r = await fetch("/api/worker/me", { headers: workerHeaders() });
-          const d = await r.json();
-          if (d?.provider) {
-            setRole("worker");
-            setWorker(d.provider);
-            setName(d.provider.name ?? "");
-            setPhone(d.provider.whatsapp ?? "");
-            setLoading(false);
-            return;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      // Check customer
-      const cToken = getCustomerToken();
-      if (cToken) {
-        try {
-          const r = await fetch("/api/auth/customer/me", { headers: customerHeaders() });
-          const d = await r.json();
-          if (d?.customer) {
-            setRole("customer");
-            setCustomer(d.customer);
-            setName(d.customer.name ?? "");
-            setPhone(d.customer.phone ?? "");
-            setLoading(false);
-            return;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      setRole(null);
-      setLoading(false);
-    };
-    void load();
-  }, []);
-
-  const save = async () => {
-    setSaving(true);
-    setSaved(false);
-    setError("");
-    try {
-      if (role === "worker") {
-        const r = await fetch("/api/worker/me", {
-          method: "PATCH",
-          headers: workerHeaders(),
-          body: JSON.stringify({ name, whatsapp: phone }),
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error ?? "Could not save.");
-        setWorker(d.provider);
-      } else if (role === "customer") {
-        const r = await fetch("/api/auth/customer/me", {
-          method: "PATCH",
-          headers: customerHeaders(),
-          body: JSON.stringify({ name, phone }),
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error ?? "Could not save.");
-        setCustomer(d.customer);
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const logout = async () => {
-    if (role === "worker") {
-      clearWorkerToken();
-      try {
-        await fetch("/api/worker/session", { method: "DELETE" });
-      } catch {
-        // ignore
-      }
-    } else if (role === "admin") {
-      clearAdminToken();
-      try {
-        await fetch("/api/admin/session", { method: "DELETE" });
-      } catch {
-        // ignore
-      }
-    } else if (role === "customer") {
-      clearCustomerToken();
-    }
-    router.push("/");
-  };
+  const { session, loading, reload, switchMode } = useSession();
+  const [switching, setSwitching] = useState(false);
+  const [note, setNote] = useState("");
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-md px-4 py-16 text-center text-sm text-slate-400">
-        Loading profile…
-      </main>
-    );
-  }
-
-  if (!role) {
-    return (
-      <main className="mx-auto max-w-md px-4 py-16 text-center">
-        <div className="text-lg font-bold text-slate-100">You're not signed in</div>
-        <p className="mt-1 text-sm text-slate-400">
-          Log in to see and edit your profile.
-        </p>
-        <Link
-          href="/login"
-          className="mt-4 inline-block rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-extrabold text-slate-950"
-        >
-          Go to Login
-        </Link>
-      </main>
-    );
-  }
-
-  if (role === "admin") {
-    return (
-      <main className="mx-auto max-w-md px-4 py-12 text-center">
-        <span className="text-3xl">🛡️</span>
-        <h1 className="mt-2 text-xl font-black text-slate-100">Admin Account</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          You're signed in with full admin access.
-        </p>
-        <div className="mt-6 flex flex-col gap-2">
-          <Link
-            href="/admin"
-            className="rounded-xl bg-lime-400 py-2.5 text-sm font-extrabold text-slate-950"
-          >
-            Go to Admin Control Room
-          </Link>
-          <button
-            onClick={logout}
-            className="rounded-xl border border-rose-500/40 bg-rose-500/10 py-2.5 text-sm font-bold text-rose-300"
-          >
-            Log out
-          </button>
+      <main className="min-h-screen bg-slate-950 p-4">
+        <div className="mx-auto max-w-lg space-y-3">
+          <div className="h-28 animate-pulse rounded-2xl bg-slate-900" />
+          <div className="h-40 animate-pulse rounded-2xl bg-slate-900" />
         </div>
       </main>
     );
   }
 
-  const avatar = role === "worker" ? worker?.avatar : customer?.avatar;
-  const roleLabel = role === "worker" ? "Worker" : "Customer";
+  if (!session?.signedIn) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-4 py-16">
+        <div className="mx-auto max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center">
+          <div className="text-3xl">🙏</div>
+          <h1 className="mt-2 text-lg font-bold text-slate-100">Namaste</h1>
+          <p className="mt-1 text-xs text-slate-400">
+            Sign in to manage your profile, post work or find jobs.
+          </p>
+          <Link
+            href="/login"
+            className="mt-4 block rounded-xl bg-lime-400 py-3 text-sm font-black text-slate-950"
+          >
+            Sign in or create account
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const mode = session.activeMode;
+  const acct = session.account;
+  const w = session.worker;
+
+  const doSwitch = async (next: "hire" | "worker") => {
+    setSwitching(true);
+    setNote("");
+    const res = await switchMode(next);
+    setSwitching(false);
+    if (next === "worker") {
+      if (res?.needsWorkerSetup || !session.hasWorkerProfile) {
+        router.push("/profile/worker");
+        return;
+      }
+      router.push("/work");
+      return;
+    }
+    router.push("/hire");
+  };
+
+  const signOut = async () => {
+    clearCustomerToken();
+    clearWorkerToken();
+    clearAdminToken();
+    await Promise.all([
+      fetch("/api/auth/login", { method: "DELETE" }).catch(() => undefined),
+      fetch("/api/worker/session", { method: "DELETE" }).catch(() => undefined),
+    ]);
+    await reload();
+    router.push("/");
+  };
 
   return (
-    <main className="mx-auto max-w-md px-4 py-10">
-      <div className="text-center">
-        <span className="inline-grid h-16 w-16 place-items-center rounded-2xl bg-slate-800 text-3xl">
-          {avatar || "🙋"}
-        </span>
-        <h1 className="mt-2 text-xl font-black text-slate-100">{name || "Your Profile"}</h1>
-        <p className="text-xs uppercase tracking-wide text-lime-400">{roleLabel} account</p>
-        {role === "worker" && worker && (
-          <p className="mt-1 text-xs text-slate-400">
-            ⭐ {worker.rating?.toFixed?.(1) ?? "—"} · {worker.jobsDone ?? 0} jobs done ·{" "}
-            {worker.area}
+    <main className="min-h-screen bg-slate-950 pb-24">
+      <div className="mx-auto max-w-lg space-y-4 px-4 py-5">
+        {/* Identity */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex items-start gap-4">
+            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-slate-800 text-3xl">
+              {mode === "worker" ? (w?.avatar ?? "🛠️") : (acct?.avatar ?? "🙋")}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-bold text-slate-100">
+                {mode === "worker" ? w?.name : acct?.name}
+              </h1>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                    mode === "worker"
+                      ? "bg-lime-400/15 text-lime-300"
+                      : "bg-sky-400/15 text-sky-300"
+                  }`}
+                >
+                  {mode === "worker" ? "Worker" : "Hire Pro"}
+                </span>
+                {(mode === "worker" ? w?.verified : acct?.verified) && (
+                  <span className="text-[10px] font-bold text-sky-400">
+                    ✓ Verified
+                  </span>
+                )}
+              </div>
+              {mode === "worker" && w && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-400">
+                  <Stars value={w.rating} size="text-xs" />
+                  <span className="font-semibold text-slate-200">
+                    {w.rating.toFixed(1)}
+                  </span>
+                  <span>· {w.jobsDone} jobs</span>
+                </div>
+              )}
+              {mode === "hire" && acct && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {acct.businessName || acct.area || "Kathmandu"}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <Link
+            href={mode === "worker" ? "/profile/worker" : "/profile/hire"}
+            className="mt-4 block w-full rounded-xl border border-slate-800 bg-slate-950 py-2.5 text-center text-xs font-bold text-slate-200 transition hover:border-lime-400/50 hover:text-lime-300"
+          >
+            Edit {mode === "worker" ? "worker" : "Hire Pro"} profile
+          </Link>
+        </section>
+
+        {/* Mode switch */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Current mode
+          </h2>
+          <p className="mb-3 text-xs text-slate-400">
+            One account, two profiles. Switch any time.
           </p>
-        )}
-        {role === "customer" && customer && (
-          <p className="mt-1 text-xs text-slate-400">@{customer.username}</p>
-        )}
-      </div>
-
-      <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-        <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">
-          Name
-        </label>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-lime-400 focus:outline-none"
-        />
-
-        <label className="mt-4 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
-          {role === "worker" ? "WhatsApp / Phone" : "Phone"}
-        </label>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-lime-400 focus:outline-none"
-        />
-
-        {error && (
-          <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2 text-xs text-rose-300">
-            {error}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              disabled={switching}
+              onClick={() => doSwitch("hire")}
+              className={`rounded-xl border p-3 text-center transition ${
+                mode === "hire"
+                  ? "border-lime-400 bg-lime-400/10"
+                  : "border-slate-800 hover:border-slate-700"
+              }`}
+            >
+              <div className="text-xl">💼</div>
+              <div
+                className={`mt-1 text-xs font-bold ${
+                  mode === "hire" ? "text-lime-300" : "text-slate-300"
+                }`}
+              >
+                Hire Pro
+              </div>
+              <div className="text-[10px] text-slate-500">Post work</div>
+            </button>
+            <button
+              disabled={switching}
+              onClick={() => doSwitch("worker")}
+              className={`rounded-xl border p-3 text-center transition ${
+                mode === "worker"
+                  ? "border-lime-400 bg-lime-400/10"
+                  : "border-slate-800 hover:border-slate-700"
+              }`}
+            >
+              <div className="text-xl">👷</div>
+              <div
+                className={`mt-1 text-xs font-bold ${
+                  mode === "worker" ? "text-lime-300" : "text-slate-300"
+                }`}
+              >
+                Worker
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {session.hasWorkerProfile ? "Find work" : "Set up profile"}
+              </div>
+            </button>
           </div>
+          {note && <p className="mt-2 text-[11px] text-lime-300">{note}</p>}
+        </section>
+
+        {/* Worker detail */}
+        {mode === "worker" && w && (
+          <>
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-200">
+                  Profile strength
+                </span>
+                <span className="font-bold text-lime-300">{w.completion}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-lime-400 transition-all"
+                  style={{ width: `${w.completion}%` }}
+                />
+              </div>
+              {w.missing.length > 0 && (
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Add: {w.missing.map((m) => m.label).join(", ")}
+                </p>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Skills
+              </h2>
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                <span className="rounded-lg bg-lime-400/15 px-2 py-1 text-[11px] font-bold text-lime-300">
+                  {categoryByKey(w.trade).emoji} {categoryByKey(w.trade).label} · primary
+                </span>
+                {splitList(w.skills).map((s) => (
+                  <span
+                    key={s}
+                    className="rounded-lg bg-slate-800 px-2 py-1 text-[11px] text-slate-300"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                <Cell label="Experience">{w.experienceYears} years</Cell>
+                <Cell label="Rate">
+                  Rs {w.baseRate}/{w.priceUnit}
+                </Cell>
+                <Cell label="Available">
+                  {splitList(w.availableDays).join(", ") || "Not set"}
+                </Cell>
+                <Cell label="Work types">
+                  {splitList(w.workTypes).join(", ") || "Any"}
+                </Cell>
+              </dl>
+            </section>
+          </>
         )}
-        {saved && (
-          <div className="mt-3 rounded-lg border border-lime-400/40 bg-lime-400/10 p-2 text-xs text-lime-300">
-            Saved ✓
-          </div>
+
+        {/* Hire Pro detail */}
+        {mode === "hire" && acct && (
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <dl className="grid grid-cols-1 gap-2 text-xs">
+              <Cell label="Phone">{acct.phone || "Not set"}</Cell>
+              <Cell label="Email">{acct.email || "Not set"}</Cell>
+              <Cell label="Location">{acct.area || "Not set"}</Cell>
+              {acct.businessName && (
+                <Cell label="Business">{acct.businessName}</Cell>
+              )}
+              {acct.businessDesc && <Cell label="About">{acct.businessDesc}</Cell>}
+            </dl>
+          </section>
         )}
+
+        {/* Settings */}
+        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+          {[
+            { l: "My bookings & requests", h: "/requests" },
+            mode === "worker"
+              ? { l: "My applications", h: "/work/applications" }
+              : { l: "My posted work", h: "/hire" },
+          ].map((r) => (
+            <Link
+              key={r.h}
+              href={r.h}
+              className="flex items-center justify-between border-b border-slate-800 px-4 py-3.5 text-sm text-slate-200 last:border-0 hover:bg-slate-800/50"
+            >
+              <span>{r.l}</span>
+              <span className="text-slate-600">›</span>
+            </Link>
+          ))}
+        </section>
 
         <button
-          onClick={save}
-          disabled={saving}
-          className="mt-4 w-full rounded-xl bg-lime-400 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50"
+          onClick={signOut}
+          className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 text-sm font-semibold text-rose-300 transition hover:border-rose-400/40"
         >
-          {saving ? "Saving…" : "Save changes"}
+          Sign out
         </button>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2">
-        {role === "worker" && (
-          <Link
-            href="/worker"
-            className="rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-center text-sm font-bold text-slate-200"
-          >
-            Go to Worker Dashboard
-          </Link>
-        )}
-        {role === "customer" && (
-          <Link
-            href="/requests"
-            className="rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-center text-sm font-bold text-slate-200"
-          >
-            My Bookings
-          </Link>
-        )}
-        <button
-          onClick={logout}
-          className="rounded-xl border border-rose-500/40 bg-rose-500/10 py-2.5 text-sm font-bold text-rose-300"
-        >
-          Log out
-        </button>
-      </div>
+      <BottomNav mode={mode} />
     </main>
+  );
+}
+
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl bg-slate-950 p-2.5">
+      <dt className="text-[10px] uppercase tracking-wide text-slate-500">{label}</dt>
+      <dd className="mt-0.5 text-slate-200">{children}</dd>
+    </div>
   );
 }

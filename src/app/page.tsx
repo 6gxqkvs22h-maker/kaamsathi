@@ -57,13 +57,6 @@ export default function HomePage() {
   // Customer login + GPS state — required before opening the request form.
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [showLoginPanel, setShowLoginPanel] = useState(false);
-  const [loginMode, setLoginMode] = useState<"login" | "register">("login");
-  const [loginName, setLoginName] = useState("");
-  const [loginUser, setLoginUser] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginPhone, setLoginPhone] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [pinLat, setPinLat] = useState<number | null>(null);
   const [pinLng, setPinLng] = useState<number | null>(null);
@@ -238,39 +231,6 @@ export default function HomePage() {
 
   const useMyLocation = () => {
     void runGps();
-  };
-
-  const customerLogin = async () => {
-    setLoginError("");
-    setLoginBusy(true);
-    try {
-      const res = await fetch("/api/auth/customer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: loginMode,
-          name: loginName,
-          username: loginUser,
-          password: loginPassword,
-          phone: loginPhone,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      setLoginBusy(false);
-      if (!res.ok) {
-        setLoginError(data.error ?? "Login failed");
-        return;
-      }
-      if (data.token) setCustomerToken(data.token);
-      setCustomer(data.customer);
-      setShowLoginPanel(false);
-      setLoginPassword("");
-      // After login, immediately require GPS before opening the form.
-      await runGps();
-    } catch {
-      setLoginBusy(false);
-      setLoginError("Network problem — try again.");
-    }
   };
 
   const customerLogout = () => {
@@ -658,23 +618,6 @@ export default function HomePage() {
                 <span>{pinLat && pinLng ? "📍 Pin shared" : "📍 Share GPS"}</span>
               </button>
 
-              {!customer && (
-                <button
-                  onClick={() => setShowLoginPanel(true)}
-                  className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs font-bold text-slate-200 hover:border-lime-400 active:scale-95"
-                >
-                  🔐 Login
-                </button>
-              )}
-              {customer && (
-                <button
-                  onClick={customerLogout}
-                  className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs font-bold text-slate-200 hover:border-rose-400 active:scale-95"
-                >
-                  Log out
-                </button>
-              )}
-
               <button
                 onClick={() => setPickMode((v) => !v)}
                 className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold shadow-xl backdrop-blur-md active:scale-95 ${
@@ -691,136 +634,41 @@ export default function HomePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 7a. Customer login + GPS pop-up (shown when user is not signed in)        */}
+      {/* 7a. Not-signed-in prompt → everyone logs in on the single /login page    */}
       {/* ========================================================================= */}
       {showLoginPanel && (
         <div className="fixed inset-0 z-[2900] flex items-center justify-center p-3">
           <button
             type="button"
-            aria-label="Close login"
+            aria-label="Close"
             onClick={() => setShowLoginPanel(false)}
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
           />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border-2 border-lime-400 bg-slate-950 shadow-2xl shadow-lime-400/20">
-            <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-              <div>
-                <div className="text-base font-black text-lime-400">
-                  {loginMode === "login"
-                    ? "🔐 Login to send a request"
-                    : "🙋 Create a customer account"}
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  Numbers stay private until a worker accepts your job.
-                </div>
-              </div>
-              <button
-                onClick={() => setShowLoginPanel(false)}
-                aria-label="Close"
-                className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 hover:text-slate-100"
-              >
-                ✕
-              </button>
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-3xl border-2 border-lime-400 bg-slate-950 p-5 text-center shadow-2xl shadow-lime-400/20">
+            <span className="inline-grid h-12 w-12 place-items-center rounded-2xl bg-lime-400 text-2xl font-black text-slate-950">
+              🔐
+            </span>
+            <div className="mt-3 text-lg font-black text-lime-400">
+              Login to send a request
             </div>
-
-            <div className="grid grid-cols-2 gap-1.5 p-2">
-              <button
-                onClick={() => setLoginMode("login")}
-                className={`rounded-xl py-2 text-xs font-bold transition ${
-                  loginMode === "login"
-                    ? "bg-lime-400 text-slate-950"
-                    : "bg-slate-900 text-slate-300 hover:text-slate-100"
-                }`}
-              >
-                I have an account
-              </button>
-              <button
-                onClick={() => setLoginMode("register")}
-                className={`rounded-xl py-2 text-xs font-bold transition ${
-                  loginMode === "register"
-                    ? "bg-lime-400 text-slate-950"
-                    : "bg-slate-900 text-slate-300 hover:text-slate-100"
-                }`}
-              >
-                Create account
-              </button>
-            </div>
-
-            <div className="space-y-2 px-4 pb-4 text-xs">
-              {loginMode === "register" && (
-                <>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-bold text-slate-300">
-                      Your name
-                    </span>
-                    <input
-                      value={loginName}
-                      onChange={(e) => setLoginName(e.target.value)}
-                      placeholder="Sita"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:border-lime-400 focus:outline-none"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-bold text-slate-300">
-                      Mobile (for workers to call back)
-                    </span>
-                    <input
-                      value={loginPhone}
-                      onChange={(e) => setLoginPhone(e.target.value)}
-                      inputMode="numeric"
-                      placeholder="98xxxxxxxx"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:border-lime-400 focus:outline-none"
-                    />
-                  </label>
-                </>
-              )}
-
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-bold text-slate-300">
-                  Username
-                </span>
-                <input
-                  value={loginUser}
-                  onChange={(e) => setLoginUser(e.target.value)}
-                  placeholder="customer"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:border-lime-400 focus:outline-none"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-bold text-slate-300">
-                  Password
-                </span>
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:border-lime-400 focus:outline-none"
-                />
-              </label>
-
-              <button
-                onClick={customerLogin}
-                disabled={loginBusy}
-                className="mt-1 w-full rounded-2xl bg-lime-400 py-3 text-sm font-black text-slate-950 shadow-md shadow-lime-400/20 transition hover:bg-lime-300 active:scale-[0.99] disabled:opacity-50"
-              >
-                {loginBusy
-                  ? "One moment…"
-                  : loginMode === "login"
-                    ? "Login & use my GPS"
-                    : "Create account & use my GPS"}
-              </button>
-
-              <p className="text-center text-[10px] text-slate-500">
-                Demo login: username <b className="text-slate-200">customer</b> · password{" "}
-                <b className="text-slate-200">customer123</b>
-              </p>
-
-              {loginError && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs font-semibold text-rose-300">
-                  {loginError}
-                </div>
-              )}
-            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Your number stays private until a worker accepts your job.
+            </p>
+            <Link
+              href="/login"
+              className="mt-4 block w-full rounded-2xl bg-lime-400 py-3 text-sm font-black text-slate-950 transition hover:bg-lime-300"
+            >
+              Go to login
+            </Link>
+            <button
+              onClick={() => setShowLoginPanel(false)}
+              className="mt-2 w-full rounded-2xl border border-slate-700 py-2.5 text-xs font-bold text-slate-300"
+            >
+              Keep browsing the map
+            </button>
+            <p className="mt-3 text-[10px] text-slate-500">
+              Demo customer: <span className="font-mono text-slate-400">customer / customer123</span>
+            </p>
           </div>
         </div>
       )}

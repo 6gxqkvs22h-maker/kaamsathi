@@ -1,0 +1,3 @@
+{
+  "/api/worker/respond/[id]/route": "app/api/worker/respond/[id]/route.js"
+}

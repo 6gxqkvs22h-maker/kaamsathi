@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { KTM_AREAS, TRADES, tradeByKey } from "@/lib/trades";
 import {
   adminHeaders,
@@ -263,7 +264,7 @@ const API_SECTIONS: ApiSection[] = [
         key: "STRIPE_SECRET_KEY",
         label: "Stripe Secret Key",
         desc: "For tourists and international card payments in Kathmandu.",
-        placeholder: "[REDACTED_STRIPE_KEY]",
+        placeholder: "sk_live_xxxxxxxxxxxxxxxxxxxxxxxx",
         docs: "https://stripe.com",
       },
     ],
@@ -338,10 +339,7 @@ type Tab = (typeof TABS)[number];
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginNote, setLoginNote] = useState("");
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
@@ -451,57 +449,6 @@ export default function AdminPage() {
       .catch(() => setAuthed(false));
   }, [load]);
 
-  const login = async (overrideCode?: string) => {
-    setError("");
-    setLoginNote("");
-    const code = (overrideCode ?? passcode).trim();
-    if (!code) {
-      setError("Type your admin passcode first (default is 'admin123').");
-      return;
-    }
-    setLoginBusy(true);
-    try {
-      const res = await fetch("/api/admin/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passcode: code }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error ?? "Login failed. Default is 'admin123'.");
-        return;
-      }
-      if (data.token) setAdminToken(data.token);
-      setLoginNote("✓ Login successful — opening control room…");
-      await load();
-      // Final fallback: even if localStorage is blocked inside the iframe,
-      // this link alone logs the admin in by handing the token in the URL.
-      window.location.href = `/api/admin/login?passcode=${encodeURIComponent(code)}`;
-    } catch {
-      setError("Network error — please check connection and tap login again.");
-    } finally {
-      setLoginBusy(false);
-    }
-  };
-
-  const resetSession = () => {
-    clearAdminToken();
-    setPasscode("");
-    setError("");
-    setLoginNote("");
-    setAuthed(false);
-  };
-
-  const logout = async () => {
-    clearAdminToken();
-    try {
-      await fetch("/api/admin/session", { method: "DELETE" });
-    } catch {
-      // ignore
-    }
-    setAuthed(false);
-  };
-
   const mutate = async (
     entity: "worker" | "request" | "review" | "bid" | "settings" | "transaction",
     action: "create" | "update" | "delete" | "approve" | "reject",
@@ -543,106 +490,26 @@ export default function AdminPage() {
   if (!authed)
     return (
       <main className="mx-auto max-w-md px-4 py-16">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-          <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-lime-400 text-2xl font-black text-slate-950 shadow-md shadow-lime-400/20">
-              🛡️
-            </span>
-            <div>
-              <h1 className="text-xl font-black text-slate-100">
-                Admin Control Room
-              </h1>
-              <p className="text-xs text-slate-400">
-                Full app control · Rates, APIs, Social & Workers
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">
-                Admin Passcode
-              </label>
-              <div className="relative">
-                <input
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && login()}
-                  type="text"
-                  placeholder="Enter admin passcode (default: admin123)"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-lime-400 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs font-semibold text-rose-300">
-                {error}
-              </div>
-            )}
-
-            {loginNote && (
-              <div className="rounded-xl border border-lime-400/40 bg-lime-400/10 p-2.5 text-xs font-semibold text-lime-300">
-                {loginNote}
-              </div>
-            )}
-
-            <button
-              onClick={() => login()}
-              disabled={loginBusy}
-              className="w-full rounded-xl bg-lime-400 py-3 text-sm font-extrabold text-slate-950 shadow-md shadow-lime-400/20 hover:bg-lime-300 active:scale-[0.99] disabled:opacity-50"
-            >
-              {loginBusy ? "Authenticating…" : "Enter Admin Backend"}
-            </button>
-
-            <div className="relative py-1 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800" />
-              </div>
-              <span className="relative bg-slate-900 px-2 text-[10px] uppercase font-bold text-slate-500">
-                Or Quick Access
-              </span>
-            </div>
-
-            <button
-              type="button"
-              disabled={loginBusy}
-              onClick={() => {
-                setPasscode("admin123");
-                void login("admin123");
-              }}
-              className="w-full rounded-xl border border-lime-400/40 bg-lime-400/10 py-2.5 text-xs font-bold text-lime-300 hover:bg-lime-400/20 active:scale-[0.99] disabled:opacity-50"
-            >
-              {loginBusy ? "Logging in…" : "⚡ 1-Click Instant Login (admin123)"}
-            </button>
-
-            <button
-              type="button"
-              onClick={resetSession}
-              className="w-full text-center text-[11px] font-semibold text-slate-500 hover:text-slate-300"
-            >
-              Having trouble? Clear saved session & retry
-            </button>
-
-            <a
-              href="/api/admin/login?passcode=admin123"
-              className="block w-full rounded-xl border border-slate-700 bg-slate-950 py-2.5 text-center text-[11px] font-bold text-slate-300 transition hover:border-lime-400 hover:text-lime-300"
-            >
-              🔗 1-click direct admin link (no cookies / storage needed)
-            </a>
-
-            <a
-              href="/api/admin/login?passcode=admin123"
-              className="block w-full rounded-xl bg-lime-400 py-3 text-center text-sm font-extrabold text-slate-950 shadow-md shadow-lime-400/20 transition hover:bg-lime-300"
-            >
-              ⚡ Open Admin Control Room
-            </a>
-          </div>
-
-          <div className="mt-5 rounded-xl border border-slate-800/80 bg-slate-950/70 p-3 text-[11px] text-slate-400 space-y-1">
-            <div className="font-bold text-slate-300">💡 Tip:</div>
-            <div>Default passcode is <span className="font-mono text-lime-400">admin123</span>. Once inside, you can change your admin password in the <b>Social & Branding</b> tab anytime.</div>
-          </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center shadow-2xl">
+          <span className="inline-grid h-12 w-12 place-items-center rounded-2xl bg-lime-400 text-2xl font-black text-slate-950">
+            🛡️
+          </span>
+          <h1 className="mt-3 text-xl font-black text-slate-100">
+            Admin Control Room
+          </h1>
+          <p className="mt-1 text-xs text-slate-400">
+            Please sign in on the main login page to continue.
+          </p>
+          <Link
+            href="/login"
+            className="mt-5 block w-full rounded-xl bg-lime-400 py-3 text-sm font-black text-slate-950 shadow-md shadow-lime-400/20 transition hover:bg-lime-300"
+          >
+            Go to login
+          </Link>
+          <p className="mt-3 text-[11px] text-slate-500">
+            Tap the <b className="text-slate-300">🛡️ Admin</b> demo button there
+            for one-tap access.
+          </p>
         </div>
       </main>
     );
@@ -663,12 +530,6 @@ export default function AdminPage() {
             className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300"
           >
             {loading ? "Refreshing…" : "🔄 Refresh"}
-          </button>
-          <button
-            onClick={logout}
-            className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300"
-          >
-            Log out
           </button>
         </div>
       </div>

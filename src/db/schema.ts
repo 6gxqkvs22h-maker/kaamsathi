@@ -35,6 +35,23 @@ export const providers = pgTable("providers", {
   featured: boolean("featured").notNull().default(false),
   status: text("status").notNull().default("approved"),
   walletBalance: integer("wallet_balance").notNull().default(0),
+  // Link back to the single user account that owns this worker profile.
+  userId: integer("user_id"),
+  email: text("email").notNull().default(""),
+  dob: text("dob").notNull().default(""),
+  gender: text("gender").notNull().default(""),
+  education: text("education").notNull().default(""),
+  certifications: text("certifications").notNull().default(""),
+  pastWork: text("past_work").notNull().default(""),
+  // Work preferences (pipe-separated for simple multi-select storage)
+  workTypes: text("work_types").notNull().default(""),
+  availableDays: text("available_days").notNull().default(""),
+  preferredHours: text("preferred_hours").notNull().default(""),
+  minRate: integer("min_rate").notNull().default(0),
+  // Verification
+  idDocUrl: text("id_doc_url").notNull().default(""),
+  skillDocUrl: text("skill_doc_url").notNull().default(""),
+  verificationStatus: text("verification_status").notNull().default("unverified"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -71,6 +88,16 @@ export const jobRequests = pgTable("job_requests", {
   targetProviderId: integer("target_provider_id"),
   radiusKm: doublePrecision("radius_km").notNull().default(1),
   customerId: integer("customer_id"),
+  // --- marketplace job fields ---
+  title: text("title").notNull().default(""),
+  requiredSkills: text("required_skills").notNull().default(""),
+  workersNeeded: integer("workers_needed").notNull().default(1),
+  paymentType: text("payment_type").notNull().default("fixed"), // fixed|daily|hourly|negotiable
+  workType: text("work_type").notNull().default("one-day"),
+  durationHours: doublePrecision("duration_hours"),
+  startDate: text("start_date").notNull().default(""),
+  startTime: text("start_time").notNull().default(""),
+  expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -145,16 +172,64 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * ONE account per person. `customers` is the user account and doubles as the
+ * Hire Pro profile. A user may additionally own one worker profile
+ * (`providers.userId`) — they switch modes, never accounts.
+ */
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   username: text("username").notNull(),
   password: text("password").notNull(),
   phone: text("phone").notNull().default(""),
+  email: text("email").notNull().default(""),
   lat: doublePrecision("lat"),
   lng: doublePrecision("lng"),
   area: text("area").notNull().default(""),
   avatar: text("avatar").notNull().default("🙋"),
+  // Hire Pro profile (kept deliberately light)
+  businessName: text("business_name").notNull().default(""),
+  businessDesc: text("business_desc").notNull().default(""),
+  serviceArea: text("service_area").notNull().default(""),
+  verified: boolean("verified").notNull().default(false),
+  // Which mode this account is currently using: "hire" | "worker"
+  activeMode: text("active_mode").notNull().default("hire"),
+  authProvider: text("auth_provider").notNull().default("password"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** Worker applies to a job. Richer lifecycle than the legacy `bids` table. */
+export const applications = pgTable("applications", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  providerId: integer("provider_id").notNull(),
+  message: text("message").notNull().default(""),
+  expectedPay: integer("expected_pay"),
+  availableConfirmed: boolean("available_confirmed").notNull().default(true),
+  matchScore: integer("match_score").notNull().default(0),
+  // applied | viewed | shortlisted | selected | rejected | cancelled | completed
+  status: text("status").notNull().default("applied"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const savedJobs = pgTable("saved_jobs", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  providerId: integer("provider_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  // audience
+  customerId: integer("customer_id"),
+  providerId: integer("provider_id"),
+  title: text("title").notNull(),
+  body: text("body").notNull().default(""),
+  kind: text("kind").notNull().default("info"),
+  href: text("href").notNull().default(""),
+  readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -171,3 +246,7 @@ export type Review = typeof reviews.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+
+export type Application = typeof applications.$inferSelect;
+export type SavedJob = typeof savedJobs.$inferSelect;
+export type AppNotification = typeof notifications.$inferSelect;

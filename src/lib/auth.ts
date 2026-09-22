@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 const SECRET = process.env.APP_SECRET ?? "fixnear-kathmandu-secret";
 export const WORKER_COOKIE = "fixnear_worker";
 export const ADMIN_COOKIE = "fixnear_admin";
+export const CUSTOMER_COOKIE = "fixnear_customer";
 
 export function adminPasscode() {
   return process.env.ADMIN_PASSCODE ?? "admin123";
@@ -101,7 +102,7 @@ export async function currentCustomerId(
   }
   try {
     const store = await cookies();
-    const val = readToken(store.get("fixnear_customer")?.value);
+    const val = readToken(store.get(CUSTOMER_COOKIE)?.value);
     if (val && val.startsWith("cust:")) {
       const n = Number(val.slice(5));
       if (Number.isFinite(n) && n > 0) return n;

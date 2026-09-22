@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { providers } from "@/db/schema";
+import { customers, providers } from "@/db/schema";
 import { ensureSeed } from "@/lib/seed";
 import { getSettings } from "@/lib/settings";
 import {
   ADMIN_COOKIE,
+  CUSTOMER_COOKIE,
   WORKER_COOKIE,
   cookieOptions,
+  hashPassword,
   isValidAdminPasscode,
   makeToken,
   normalizePhone,
@@ -15,120 +17,135 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * ONE login for everybody.
- * Type your mobile number → you get a worker session.
- * Type the admin passcode → you get an admin session.
- * The app figures out which one you are, so nobody has to pick a role.
+ * ONE login endpoint for everybody.
+ *
+ * Send `{ identifier, password? }`:
+ *   • admin passcode      → admin session   (no password needed)
+ *   • worker mobile       → worker session  (no password needed)
+ *   • customer username   → customer session (password required)
+ *   • customer mobile     → customer session (password required)
+ *
+ * If the identifier belongs to a customer but no password was supplied, the
+ * response is 200 with `{ needsPassword: true }` so the UI can reveal the
+ * password box instead of showing a scary error.
  */
 export async function POST(req: NextRequest) {
   await ensureSeed();
   const body = await req.json().catch(() => ({}));
-  const raw = String(body.identifier ?? body.phone ?? body.passcode ?? "").trim();
+  const raw = String(
+    body.identifier ?? body.phone ?? body.username ?? body.passcode ?? "",
+  ).trim();
+  const password = String(body.password ?? "");
 
   if (!raw) {
     return NextResponse.json(
-      { error: "Enter your mobile number to continue." },
+      { error: "Type your mobile number, username or admin passcode." },
       { status: 400 },
     );
   }
 
   const settings = await getSettings();
 
-  // 1) Admin passcode — anything that matches env/DB password is admin.
+  /* ------------------------------ 1) ADMIN ------------------------------ */
   if (isValidAdminPasscode(raw, settings.adminPassword)) {
     const token = makeToken("admin");
-    const res = NextResponse.json({ role: "admin", token });
-    res.cookies.set(ADMIN_COOKIE, token, { ...cookieOptions, maxAge: 60 * 60 * 24 * 7 });
+    const res = NextResponse.json({
+      role: "admin",
+      token,
+      redirect: "/admin",
+    });
+    res.cookies.set(ADMIN_COOKIE, token, {
+      ...cookieOptions,
+      maxAge: 60 * 60 * 24 * 7,
+    });
     return res;
   }
 
-  // 2) Worker login by mobile number.
-  const looksLikePhone = /^[\d+\s-]{7,}$/.test(raw);
-  if (looksLikePhone) {
-    const phone = normalizePhone(raw);
-    if (phone.length >= 7) {
-      const all = await db.select().from(providers);
-      const match = all.find(
-        (p) => normalizePhone(p.phone) === phone && p.status === "approved",
-      );
-      if (match) {
-        const token = makeToken(String(match.id));
-        const res = NextResponse.json({
-          role: "worker",
-          token,
-          provider: {
-            id: match.id,
-            name: match.name,
-            trade: match.trade,
-            area: match.area,
-            avatar: match.avatar,
-          },
-        });
-        res.cookies.set(WORKER_COOKIE, token, cookieOptions);
-        return res;
-      }
+  /* ------------------------------ 2) WORKER ----------------------------- */
+  const phone = normalizePhone(raw);
+  if (phone.length >= 7) {
+    const allPros = await db.select().from(providers);
+    const worker = allPros.find(
+      (p) => normalizePhone(p.phone) === phone && p.status === "approved",
+    );
+    if (worker) {
+      const token = makeToken(String(worker.id));
+      const res = NextResponse.json({
+        role: "worker",
+        token,
+        redirect: "/worker",
+        provider: {
+          id: worker.id,
+          name: worker.name,
+          trade: worker.trade,
+          area: worker.area,
+          avatar: worker.avatar,
+        },
+      });
+      res.cookies.set(WORKER_COOKIE, token, cookieOptions);
+      return res;
     }
   }
 
-  // 3) Customer login by username (or mobile if registered with one).
-  //    The username comes from `body.username` and the password from
-  //    `body.password` — falling back to legacy single-field usage.
-  const { customers } = await import("@/db/schema");
-  const { hashPassword } = await import("@/lib/auth");
-  const { eq } = await import("drizzle-orm");
+  /* ----------------------------- 3) CUSTOMER ---------------------------- */
+  const candidate = raw.toLowerCase();
+  const allCustomers = await db.select().from(customers);
+  const customer =
+    allCustomers.find((c) => c.username.toLowerCase() === candidate) ??
+    allCustomers.find(
+      (c) => phone.length >= 7 && normalizePhone(c.phone) === phone,
+    ) ??
+    null;
 
-  const usernameInput = String(body.username ?? "").toLowerCase().trim();
-  const passwordInput = String(body.password ?? "");
-  const candidate = usernameInput || raw.toLowerCase().trim();
-  const candidatePassword = passwordInput || raw;
-
-  const rows = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.username, candidate));
-  type Cust = typeof rows[number];
-  let found: Cust | null = rows[0] ?? null;
-  if (!found) {
-    const phone = normalizePhone(raw);
-    const allCustomers = await db.select().from(customers);
-    const match = allCustomers.find(
-      (c) => normalizePhone(c.phone) === phone,
-    );
-    found = (match as Cust | undefined) ?? null;
-  }
-  const passwordMatches = found
-    ? found.password === hashPassword(candidatePassword)
-    : false;
-  if (!found || !passwordMatches) {
-    return NextResponse.json(
-      {
-        error:
-          "We couldn't match those credentials to customer, worker or admin.",
+  if (customer) {
+    // Found the account but the password box hasn't been filled in yet.
+    if (!password) {
+      return NextResponse.json({
+        needsPassword: true,
+        role: "customer",
+        name: customer.name,
+        message: `Welcome back, ${customer.name.split(" ")[0]} — type your password to continue.`,
+      });
+    }
+    if (customer.password !== hashPassword(password)) {
+      return NextResponse.json(
+        { error: "Wrong password. Please try again." },
+        { status: 401 },
+      );
+    }
+    const token = makeToken(`cust:${customer.id}`);
+    const res = NextResponse.json({
+      role: "customer",
+      token,
+      redirect: "/",
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        username: customer.username,
+        phone: customer.phone,
+        area: customer.area,
+        avatar: customer.avatar,
       },
-      { status: 404 },
-    );
+    });
+    res.cookies.set(CUSTOMER_COOKIE, token, cookieOptions);
+    return res;
   }
 
-  const token = makeToken(`cust:${found.id}`);
-  const res = NextResponse.json({
-    role: "customer",
-    token,
-    customer: {
-      id: found.id,
-      name: found.name,
-      username: found.username,
-      phone: found.phone,
-      area: found.area,
-      avatar: found.avatar,
+  /* ------------------------------ NO MATCH ------------------------------ */
+  return NextResponse.json(
+    {
+      error:
+        "No account found. Check your mobile / username, or create a new account below.",
+      needsRegister: true,
     },
-  });
-  res.cookies.set("fixnear_customer", token, cookieOptions);
-  return res;
+    { status: 404 },
+  );
 }
 
 export async function DELETE() {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(ADMIN_COOKIE, "", { ...cookieOptions, maxAge: 0 });
   res.cookies.set(WORKER_COOKIE, "", { ...cookieOptions, maxAge: 0 });
+  res.cookies.set(CUSTOMER_COOKIE, "", { ...cookieOptions, maxAge: 0 });
   return res;
 }
