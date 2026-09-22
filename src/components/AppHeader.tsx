@@ -6,7 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   adminHeaders,
   clearAdminToken,
+  clearCustomerToken,
   clearWorkerToken,
+  customerHeaders,
+  getCustomerToken,
   getWorkerToken,
   workerHeaders,
 } from "@/lib/clientAuth";
@@ -20,11 +23,18 @@ type WorkerMini = {
   area: string;
 };
 
+type CustomerMini = {
+  id: number;
+  name: string;
+  avatar: string;
+};
+
 export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [worker, setWorker] = useState<WorkerMini | null>(null);
+  const [customer, setCustomer] = useState<CustomerMini | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
 
@@ -37,13 +47,10 @@ export default function AppHeader() {
   }
 
   // Check auth sessions on mount / path change.
-  // NOTE: /api/worker/session has no GET handler, so the worker session is
-  // verified directly against /api/worker/me with the saved token header.
   useEffect(() => {
     let cancelled = false;
-    const token = getWorkerToken();
-    // No token → keep worker as null (initial value); no sync setState here.
-    if (token) {
+    const workerToken = getWorkerToken();
+    if (workerToken) {
       void fetch("/api/worker/me", { headers: workerHeaders() })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -63,6 +70,27 @@ export default function AppHeader() {
         })
         .catch(() => {
           if (!cancelled) setWorker(null);
+        });
+    }
+
+    const customerToken = getCustomerToken();
+    if (customerToken) {
+      void fetch("/api/auth/customer/me", { headers: customerHeaders() })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled) return;
+          if (d?.customer) {
+            setCustomer({
+              id: d.customer.id,
+              name: d.customer.name,
+              avatar: d.customer.avatar,
+            });
+          } else {
+            setCustomer(null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setCustomer(null);
         });
     }
 
@@ -129,6 +157,15 @@ export default function AppHeader() {
     router.push("/");
   };
 
+  const logoutCustomer = async () => {
+    clearCustomerToken();
+    setCustomer(null);
+    setDrawerOpen(false);
+    router.push("/");
+  };
+
+  const signedIn = Boolean(isAdmin || worker || customer);
+
   return (
     <>
       <header className="sticky top-0 z-[1000] border-b border-slate-800 bg-slate-950/95 backdrop-blur">
@@ -170,7 +207,7 @@ export default function AppHeader() {
             </Link>
           </div>
 
-          {/* Right quick actions */}
+          {/* Right quick actions — single account entry point */}
           <nav className="flex items-center gap-2 text-sm font-medium">
             <Link
               href="/requests"
@@ -181,19 +218,27 @@ export default function AppHeader() {
 
             {isAdmin ? (
               <Link
-                href="/admin"
+                href="/profile"
                 className="rounded-lg border border-lime-400/40 bg-lime-400/10 px-2.5 py-1.5 text-xs font-bold text-lime-300 hover:bg-lime-400/20"
               >
                 🛡️ Admin
               </Link>
             ) : worker ? (
               <Link
-                href="/worker"
+                href="/profile"
                 className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-200 hover:border-lime-400"
               >
                 <span>{worker.avatar}</span>
                 <span className="hidden md:inline">{worker.name.split(" ")[0]}</span>
                 <span className="h-2 w-2 rounded-full bg-lime-400"></span>
+              </Link>
+            ) : customer ? (
+              <Link
+                href="/profile"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-200 hover:border-lime-400"
+              >
+                <span>{customer.avatar}</span>
+                <span className="hidden md:inline">{customer.name.split(" ")[0]}</span>
               </Link>
             ) : (
               <Link
@@ -205,7 +250,6 @@ export default function AppHeader() {
             )}
           </nav>
         </div>
-
       </header>
 
       {/* ========================================================================= */}
@@ -251,8 +295,12 @@ export default function AppHeader() {
                 </button>
               </div>
 
-              {/* User profile summary in drawer */}
-              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-3">
+              {/* User profile summary in drawer — single entry point for account/login */}
+              <Link
+                href={signedIn ? "/profile" : "/login"}
+                onClick={() => setDrawerOpen(false)}
+                className="mt-4 block rounded-xl border border-slate-800 bg-slate-900 p-3"
+              >
                 {worker ? (
                   <div className="flex items-center gap-3">
                     <span className="grid h-10 w-10 place-items-center rounded-lg bg-slate-800 text-xl">
@@ -274,6 +322,18 @@ export default function AppHeader() {
                       </div>
                     </div>
                   </div>
+                ) : customer ? (
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-10 w-10 place-items-center rounded-lg bg-slate-800 text-xl">
+                      {customer.avatar}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold text-slate-100">
+                        {customer.name}
+                      </div>
+                      <div className="text-xs text-slate-400">View profile</div>
+                    </div>
+                  </div>
                 ) : isAdmin ? (
                   <div className="flex items-center gap-2.5">
                     <span className="text-xl">🛡️</span>
@@ -288,21 +348,16 @@ export default function AppHeader() {
                   </div>
                 ) : (
                   <div>
-                    <div className="text-sm font-bold text-slate-100">
-                      Namaste! 🙏
-                    </div>
+                    <div className="text-sm font-bold text-slate-100">Namaste! 🙏</div>
                     <div className="text-xs text-slate-400">
                       Need a pro? Or want to work and earn?
                     </div>
-                    <Link
-                      href="/login"
-                      className="mt-2 block w-full rounded-lg bg-lime-400 py-1.5 text-center text-xs font-bold text-slate-950"
-                    >
-                      Worker Login / Register
-                    </Link>
+                    <span className="mt-2 block w-full rounded-lg bg-lime-400 py-1.5 text-center text-xs font-bold text-slate-950">
+                      Login / Register
+                    </span>
                   </div>
                 )}
-              </div>
+              </Link>
             </div>
 
             {/* Navigation links */}
@@ -404,15 +459,15 @@ export default function AppHeader() {
               </div>
 
               <Link
-                href="/login"
+                href={signedIn ? "/profile" : "/login"}
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition ${
-                  pathname === "/login"
+                  pathname === "/profile" || pathname === "/login"
                     ? "bg-lime-400/10 font-bold text-lime-300"
                     : "text-slate-300 hover:bg-slate-800/80 hover:text-slate-100"
                 }`}
               >
-                <span className="text-lg">🔐</span>
-                <span>Login (everyone)</span>
+                <span className="text-lg">{signedIn ? "👤" : "🔐"}</span>
+                <span>{signedIn ? "My Profile" : "Login"}</span>
               </Link>
 
               <Link
@@ -510,34 +565,36 @@ export default function AppHeader() {
               </div>
             </div>
 
-            {/* Drawer Footer */}
-            <div className="border-t border-slate-800 bg-slate-950/80 p-3">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>{appSettings?.appName || "KaamSathi"} v2.5</span>
-                {worker ? (
-                  <button
-                    onClick={logoutWorker}
-                    className="font-bold text-rose-400 hover:underline"
-                  >
-                    Worker Logout
-                  </button>
-                ) : isAdmin ? (
-                  <button
-                    onClick={logoutAdmin}
-                    className="font-bold text-rose-400 hover:underline"
-                  >
-                    Admin Logout
-                  </button>
-                ) : (
-                  <Link
-                    href="/login"
-                    className="font-bold text-lime-400 hover:underline"
-                  >
-                    Sign In
-                  </Link>
-                )}
+            {/* Drawer Footer — logout only when signed in; no duplicate login link */}
+            {signedIn && (
+              <div className="border-t border-slate-800 bg-slate-950/80 p-3">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>{appSettings?.appName || "KaamSathi"} v2.5</span>
+                  {worker ? (
+                    <button
+                      onClick={logoutWorker}
+                      className="font-bold text-rose-400 hover:underline"
+                    >
+                      Log out
+                    </button>
+                  ) : isAdmin ? (
+                    <button
+                      onClick={logoutAdmin}
+                      className="font-bold text-rose-400 hover:underline"
+                    >
+                      Log out
+                    </button>
+                  ) : customer ? (
+                    <button
+                      onClick={logoutCustomer}
+                      className="font-bold text-rose-400 hover:underline"
+                    >
+                      Log out
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            )}
           </aside>
         </div>
       )}
