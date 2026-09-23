@@ -323,7 +323,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Continue with Google */}
+      {/* Continue with Google — one button, server figures out worker vs customer */}
       <div className="mt-4 space-y-2">
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
           <span className="h-px flex-1 bg-slate-800" />
@@ -331,23 +331,29 @@ export default function LoginPage() {
           <span className="h-px flex-1 bg-slate-800" />
         </div>
         <a
-          href="/api/auth/google/start?role=customer"
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-bold text-slate-200 transition hover:border-slate-500"
+          href="/api/auth/google/start"
+          className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-700 bg-white py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-100"
         >
-          <span>🙋</span>
-          <span>Continue with Google — I need a service</span>
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path
+              fill="#FFC107"
+              d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"
+            />
+            <path
+              fill="#FF3D00"
+              d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6.1 29.6 4 24 4 16 4 9.1 8.5 6.3 14.7z"
+            />
+            <path
+              fill="#4CAF50"
+              d="M24 44c5.5 0 10.4-2.1 14.1-5.6l-6.5-5.5C29.6 34.8 27 35.9 24 35.9c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9 39.6 16 44 24 44z"
+            />
+            <path
+              fill="#1976D2"
+              d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.5 5.5C41.6 35.9 44 30.4 44 24c0-1.2-.1-2.4-.4-3.5z"
+            />
+          </svg>
+          <span>Continue with Google</span>
         </a>
-        <a
-          href="/api/auth/google/start?role=worker"
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-bold text-slate-200 transition hover:border-slate-500"
-        >
-          <span>🛠️</span>
-          <span>Continue with Google — I'm a worker</span>
-        </a>
-        <p className="text-center text-[10px] text-slate-500">
-          Workers: Google sign-in works after you've registered once with your
-          trade &amp; mobile.
-        </p>
       </div>
 
       {/* One-tap demo logins */}
