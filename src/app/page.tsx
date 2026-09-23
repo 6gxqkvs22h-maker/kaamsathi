@@ -97,6 +97,13 @@ export default function HomePage() {
     });
   }, []);
 
+  // Auto-center the map on the user's GPS as soon as the page loads,
+  // instead of requiring a tap on "Share GPS" first.
+  useEffect(() => {
+    void runGps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Reuse header "openForm" intent: gate on login + GPS.
   const openForm = async () => {
     if (!customer) {
