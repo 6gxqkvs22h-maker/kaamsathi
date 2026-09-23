@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { customers, providers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import {
+  ADMIN_COOKIE,
   CUSTOMER_COOKIE,
   WORKER_COOKIE,
   cookieOptions,
@@ -54,6 +55,17 @@ export async function GET(req: NextRequest) {
   const email = String(profile.email ?? "").toLowerCase().trim();
   const name = String(profile.name ?? "").trim() || "Google User";
   if (!email) return fail(req, "Google didn't share an email address.");
+
+  // Designated admin email logs straight into Admin — no passcode needed.
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").toLowerCase().trim();
+  if (adminEmail && email === adminEmail) {
+    const token = makeToken("admin");
+    const res = NextResponse.redirect(
+      new URL(`/login?g_role=admin&g_token=${encodeURIComponent(token)}`, req.url),
+    );
+    res.cookies.set(ADMIN_COOKIE, token, { ...cookieOptions, maxAge: 60 * 60 * 24 * 7 });
+    return res;
+  }
 
   const [worker] = await db
     .select()
