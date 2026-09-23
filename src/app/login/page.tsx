@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   setAdminToken,
@@ -40,6 +40,25 @@ export default function LoginPage() {
     const dest = redirect || (role === "admin" ? "/admin" : role === "worker" ? "/worker" : "/");
     window.location.href = `${dest}${dest.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(token)}`;
   };
+
+  // Pick up the token/error Google's callback route redirects back with.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gToken = params.get("g_token");
+    const gRole = params.get("g_role");
+    const gError = params.get("g_error");
+    if (gToken && gRole) {
+      applyToken(gRole, gToken);
+      goTo(gRole, gToken);
+      return;
+    }
+    if (gError) {
+      setError(gError);
+      window.history.replaceState({}, "", "/login");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   /** One submit handler for admin + worker + customer. */
   const submit = async (overrideId?: string, overridePass?: string) => {
@@ -302,6 +321,33 @@ export default function LoginPage() {
             </button>
           </>
         )}
+      </div>
+
+      {/* Continue with Google */}
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+          <span className="h-px flex-1 bg-slate-800" />
+          or
+          <span className="h-px flex-1 bg-slate-800" />
+        </div>
+        <a
+          href="/api/auth/google/start?role=customer"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-bold text-slate-200 transition hover:border-slate-500"
+        >
+          <span>🙋</span>
+          <span>Continue with Google — I need a service</span>
+        </a>
+        <a
+          href="/api/auth/google/start?role=worker"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-bold text-slate-200 transition hover:border-slate-500"
+        >
+          <span>🛠️</span>
+          <span>Continue with Google — I'm a worker</span>
+        </a>
+        <p className="text-center text-[10px] text-slate-500">
+          Workers: Google sign-in works after you've registered once with your
+          trade &amp; mobile.
+        </p>
       </div>
 
       {/* One-tap demo logins */}
