@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Kicks off Google sign-in. Call as /api/auth/google/start?role=customer
-// or /api/auth/google/start?role=worker
+// Kicks off Google sign-in. One button for everyone — the callback figures
+// out whether the Google email belongs to a worker or customer.
 export async function GET(req: NextRequest) {
-  const role = req.nextUrl.searchParams.get("role") === "worker" ? "worker" : "customer";
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     return NextResponse.redirect(
@@ -21,7 +20,6 @@ export async function GET(req: NextRequest) {
     scope: "openid email profile",
     access_type: "online",
     prompt: "select_account",
-    state: role,
   });
 
   return NextResponse.redirect(
